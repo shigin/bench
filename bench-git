@@ -1,0 +1,207 @@
+#!/bin/sh
+
+usage() {
+cat << END
+usage: $0 [--repo url|--conf file|--dir dir] [--rev revision]... program
+    --repo url      --- use repository
+    --dir dir       --- use directory to check
+    --conf file     --- config file
+    --make program  --- use program to build instead of make
+    --rev revision  --- bench revision
+    --minmax        --- show min and max times
+    program         --- program to bench
+END
+}
+
+die() {
+    echo $0: "$@" 1>&2
+    exit 1
+}
+
+BENCH=./bench
+MAKE=make
+
+case $0 in
+    *bench-svn)
+        checkout() {
+            local repository="$1"
+            local target="$2"
+            svn checkout $repository $target
+        }
+
+        set_revision() {
+            local wc="$1"
+            local rev="$2"
+            svn update -r "$rev" "$wc"
+        }
+        ;;
+    *bench-git|*)
+        checkout() {
+            local repository="$1"
+            local target="$2"
+            git clone $repository $target
+        }
+
+        set_revision() {
+            local wc="$1"
+            local rev="$2"
+            (cd $wc && git reset --hard $rev)
+        }
+esac
+
+write_bench_data() {
+    local revs="$1"
+    local wc="$2"
+    local program="$3"
+    local data_file="$4"
+    local tmp="`mktemp tempdata.XXX`"
+
+    for rev in $revs ; do
+        set_revision "$wc" "$rev" || { rm $tmp; die "can't checkout $rev"; }
+        (cd "$wc" && $MAKE) || { rm $tmp; die "can't make"; }
+        if $BENCH -b -d $wc $PROGRAM > "$tmp" ; then
+            grep '=' $tmp | sed "s/^/rev${rev}_/" >> "$data_file"
+            sleep 1
+        else
+            rm $tmp
+            die "can't run benchmark"
+        fi
+    done
+    rm $tmp
+}
+
+get_revs() {
+    if [ -n "$*" ] ; then
+        echo "$@"
+    else
+        die "please specify revision"
+    fi
+}
+
+get_table() {
+    local revs="`get_revs "$@"`"
+    cat << END
+Time table
+.pl 1000i
+.TS
+tab(@);
+l | c s | c s | c s
+l | c c | c c | c c
+r | n n | n n | n n.
+_
+revision @ real @ user @ sys
+    @ mean @ sd @ mean @ sd @ mean @ sd
+END
+    if [ "$MINMAX" = 1 ] ; then
+        echo " @ min @ max @ min @ max @ min @ max"
+    fi
+    echo _
+    for rev in $revs ; do
+        eval  "sys=\"\$rev${rev}_bench_sys_mean\""
+        eval "user=\"\$rev${rev}_bench_user_mean\""
+        eval "real=\"\$rev${rev}_bench_real_mean\""
+
+        eval  "sys_sd=\"\$rev${rev}_bench_sys_sd\""
+        eval "user_sd=\"\$rev${rev}_bench_user_sd\""
+        eval "real_sd=\"\$rev${rev}_bench_real_sd\""
+
+        eval  "sys_min=\"\$rev${rev}_bench_sys_min\""
+        eval "user_min=\"\$rev${rev}_bench_user_min\""
+        eval "real_min=\"\$rev${rev}_bench_real_min\""
+
+        eval  "sys_max=\"\$rev${rev}_bench_sys_max\""
+        eval "user_max=\"\$rev${rev}_bench_user_max\""
+        eval "real_max=\"\$rev${rev}_bench_real_max\""
+
+        echo "$rev @ $real @ $real_sd @ $user @ $user_sd @ $sys @ $sys_sd"
+        if [ "$MINMAX" = 1 ] ;then
+            echo "@ $real_min @ $real_max @ $user_min @ $user_max @ $sys_min @ $sys_max"
+            echo _
+        fi
+    done
+
+    if [ "$MINMAX" = 0 ] ; then
+        echo _
+    fi
+    cat << END
+.TE
+.pl 0i
+END
+}
+
+MINMAX=0
+while [ ! -z "$1" ] ; do
+    case $1 in
+    --minmax)
+        MINMAX=1
+        ;;
+    --dir)
+        [ -z "$2" ] && die"directory option require directory"
+        DIRECTORY="$2"
+        shift
+        ;;
+    --repo)
+        [ -z "$2" ] && "repo option require repository URL"
+        REPO="$2"
+        shift
+        ;;
+    --conf)
+        [ -z "$2" ] && "conf option require configuration file"
+        . $2
+        shift
+        ;;
+    --rev)
+        [ -z "$2" ] && "rev option require revision number"
+        REVS="$REVS $2"
+        shift
+        ;;
+    --make)
+        [ -z "$2" ] && "make option require make program"
+        MAKE="$2"
+        shift
+        ;;
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    -*)
+        die "unknown option '$1'"
+        ;;
+    *)
+        break
+        ;;
+    esac
+    shift
+done
+
+if [ -z "$REVS" ] ; then
+    REVS="HEAD"
+fi
+
+if [ -z "$PROGRAM" ] ; then
+    [ -z "$*" ] && die "need program to run"
+    PROGRAM="$*"
+fi
+
+if [ -n "$REPO" ] ; then
+    WC=`mktemp -d _repoXXXX`
+    [ -z "$WC" ] && die "can't create temporary directory"
+    DIRECTORY=$WC/repo
+    checkout "$REPO" "$DIRECTORY" || die "can't clone repository"
+fi
+
+echo > .bench-data
+if [ -n "$DIRECTORY" ] ; then
+    write_bench_data "$REVS" "$DIRECTORY" "$PROGRAM" .bench-data
+else
+    die "need directory to work"
+fi
+
+if [ -n "$WC" ] ; then
+    rm -rf "$WC"
+fi
+
+. ./.bench-data
+
+
+get_table $REVS | nroff -t
