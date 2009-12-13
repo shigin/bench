@@ -402,6 +402,7 @@ void help(FILE *out, const char *progname) {
     "   -i file --- use file for stdin instead of /dev/null /input/\n"
     "   -p prog --- use command output instead of /dev/null\n"
     "   -n N    --- run program N times /num/\n"
+    "   -e      --- easy mode\n"
     "   -b      --- output in sh format /bash/\n"
     "   -c      --- output calibration time\n"
     "   -l      --- print rusage information /long/\n"
