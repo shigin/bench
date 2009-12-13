@@ -437,10 +437,11 @@ int main(int argc, char **argv) {
     struct slave_t for_test;
     int i, opt;
     int is_batch = 0;
+    int do_calibrate = 1;
     int print_calibrate = 0;
     int print_full = 0;
     int filter = 1;
-    print_function_t *do_print = normal_print;
+    print_function_t *print_routine = normal_print;
 
     memset(&for_test, 0, sizeof(struct slave_t));
     for_test.args = calloc(argc, sizeof(char *));
@@ -480,7 +481,7 @@ int main(int argc, char **argv) {
             for_test.iprog = strdup(optarg);
             break;
           case 'b':
-            do_print = batch_print;
+            print_routine = batch_print;
             is_batch = 1;
             break;
           case 'e':
@@ -490,8 +491,9 @@ int main(int argc, char **argv) {
                     argv[0]);
                 return 1;
             }
+            do_calibrate = 0;
             filter = 0;
-            do_print = easy_mode;
+            print_routine = easy_mode;
             break;
           case 's':
             if (is_batch) {
@@ -507,7 +509,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             filter = 0;
-            do_print = series_print;
+            print_routine = series_print;
             break;
           case 'c':
             print_calibrate = 1;
@@ -540,7 +542,10 @@ int main(int argc, char **argv) {
     for (i = optind; i < argc; ++i) {
         for_test.args[i - optind] = argv[i];
     }
-    calibrate(stdout, do_print, for_test, print_calibrate, print_full);
+    if (do_calibrate) {
+        calibrate(stdout, print_routine, for_test,
+            print_calibrate, print_full);
+    }
     for (i = 0; i < count; ++i)
     {
         run_program(for_test, measures + i);
@@ -550,7 +555,7 @@ int main(int argc, char **argv) {
         if (filter) {
             bad = mark_bad_all(measures, count);
         }
-        do_print(stdout, "SUMMARY", print_full, measures, count, bad);
+        print_routine(stdout, "SUMMARY", print_full, measures, count, bad);
     }
     free(for_test.args);
     free(for_test.ifile);
