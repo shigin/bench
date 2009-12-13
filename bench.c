@@ -269,27 +269,50 @@ void series_print(FILE *out, const char *header, int full,
         fprintf(out, "failed run: %u\n", bad);
     }
     /* XXX I don't like to produce table in that way */
+    fputs(
+        "--+-----------------------+-----------------------+-----------------------\n",
+        out);
     fprintf(out, " #|%22s |%22s |%22s\n",
         "real time", "user time", "system time");
     fputs(
         "--+-----------------------+-----------------------+-----------------------\n",
         out);
     #define T (1000*1000.0)
-    #define TD(from, x) do {\
+    #define TD(from, cnt, x) do {\
         struct statistic_t s;\
-        calculate_statistic(&s, measures + from, in_series,\
+        calculate_statistic(&s, from, cnt,\
             offsetof(struct measure_t, x), ru_time2ll);\
         fprintf(out, "%6.3f [%6.3f] %6.3f ",\
             s.min/T, s.mean/T, s.max/T); \
         } while (0)
     for (i = 0; i < count; i += in_series) {
         fprintf(out, "%2u|", i/in_series + 1);
-        TD(i, real);
+        TD(measures + i, in_series, real);
         fputs("|", out);
-        TD(i, ru.ru_utime);
+        TD(measures + i, in_series, ru.ru_utime);
         fputs("|", out);
-        TD(i, ru.ru_stime);
+        TD(measures + i, in_series, ru.ru_stime);
         fputs("\n", out);
+    }
+    if (in_series < count) {
+        struct measure_t *copy = malloc(count*sizeof(struct measure_t));
+        unsigned filtered;
+        memcpy(copy, measures, count*sizeof(struct measure_t));
+        filtered = mark_bad_all(copy, count);
+        fputs(
+            "--+-----------------------+-----------------------+-----------------------\n",
+            out);
+        fputs("  |", out);
+        TD(copy, count, real);
+        fputs("|", out);
+        TD(copy, count, ru.ru_utime);
+        fputs("|", out);
+        TD(copy, count, ru.ru_stime);
+        fputs("\n", out);
+        if (filtered > 0) {
+            fprintf(out, "  |   filtered out: %2u    |                       |\n", filtered);
+        }
+        free(copy);
     }
     #undef TD
     #undef T
