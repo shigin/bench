@@ -369,7 +369,7 @@ void normal_print(FILE *out, const char *header, int full,
         struct statistic_t s;\
         calculate_statistic(&s, measures, count,\
             offsetof(struct measure_t, x), ru_time2ll);\
-        fprintf(out, "%s: %5.2f [%6.3f +-%4.3f] %5.2f\n",\
+        fprintf(out, "%s: %6.3f [%6.3f +-%4.3f] %6.3f\n",\
             prefix, s.min/T, s.mean/T, s.sd/T, s.max/T); \
         } while (0)
     TD("real time", real);
