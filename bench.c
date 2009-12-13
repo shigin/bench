@@ -91,6 +91,11 @@ int run_program(struct slave_t ft, struct measure_t *measure) {
     return measure->exit_status;
 }
 
+struct measure_t *mdup(const struct measure_t *orig, unsigned count) {
+    struct measure_t *copy = malloc(count*sizeof(struct measure_t));
+    memcpy(copy, orig, count*sizeof(struct measure_t));
+    return copy;
+}
 #define DEFAULT_COUNT 10
 
 double timeval2double(const struct timeval pair)
@@ -295,9 +300,8 @@ void series_print(FILE *out, const char *header, int full,
         fputs("\n", out);
     }
     if (in_series < count) {
-        struct measure_t *copy = malloc(count*sizeof(struct measure_t));
+        struct measure_t *copy = mdup(measures, count);
         unsigned filtered;
-        memcpy(copy, measures, count*sizeof(struct measure_t));
         filtered = mark_bad_all(copy, count);
         fputs(
             "--+-----------------------+-----------------------+-----------------------\n",
@@ -322,9 +326,38 @@ void series_print(FILE *out, const char *header, int full,
 }
 
 void normal_print(FILE *out, const char *header, int full,
+        const struct measure_t *measures, unsigned count, unsigned bad);
+
+void easy_mode(FILE *out, const char *header, int full,
+        const struct measure_t *measures, unsigned count, unsigned bad) {
+    unsigned i;
+    unsigned filtered;
+    struct measure_t *copy = mdup(measures, count);
+    (void)bad;
+    fprintf(out, "%20s\n", header);
+    fputs("-----+--------+--------+--------+----\n", out);
+    fputs("     |  real  |  user  |  sys   | ec \n", out);
+    fputs("-----+--------+--------+--------+----\n", out);
+    for (i = 0; i < count; ++i) {
+        fprintf(out, " %3u | %6.3f | %6.3f | %6.3f | %2d\n",
+            i + 1,
+            timeval2double(measures[i].real),
+            timeval2double(measures[i].ru.ru_utime),
+            timeval2double(measures[i].ru.ru_stime),
+            measures[i].exit_status
+        );
+    }
+    fputs("-----+--------+--------+--------+----\n", out);
+    filtered = mark_bad_all(copy, count);
+    normal_print(out, 0, full, copy, count, filtered);
+    free(copy);
+}
+
+void normal_print(FILE *out, const char *header, int full,
         const struct measure_t *measures, unsigned count, unsigned bad) {
     unsigned failed = get_failed(measures, count);
-    fprintf(out, "       %s\n", header);
+    if (header)
+        fprintf(out, "       %s\n", header);
     if (failed != 0) {
         fprintf(out, "program failed: %u\n", failed);
     }
@@ -418,7 +451,7 @@ int main(int argc, char **argv) {
     }
     /* read options */
     setenv("POSIXLY_CORRECT", "1", 0); /* gnu fix */
-    while ((opt = getopt(argc, argv, "n:i:p:d:s:hbcfl")) != -1) {
+    while ((opt = getopt(argc, argv, "n:i:p:d:s:hbcfle")) != -1) {
         switch (opt) {
           case 'h':
             help(stdout, argv[0]);
@@ -449,6 +482,16 @@ int main(int argc, char **argv) {
           case 'b':
             do_print = batch_print;
             is_batch = 1;
+            break;
+          case 'e':
+            if (is_batch) {
+                fprintf(stderr, 
+                    "%s: batch output for easy isn't implemented yet\n",
+                    argv[0]);
+                return 1;
+            }
+            filter = 0;
+            do_print = easy_mode;
             break;
           case 's':
             if (is_batch) {
