@@ -275,11 +275,9 @@ void series_print(FILE *out, const char *header, int full,
     }
     /* XXX I don't like to produce table in that way */
     fputs(
-        "--+-----------------------+-----------------------+-----------------------\n",
-        out);
-    fprintf(out, " #|%22s |%22s |%22s\n",
-        "real time", "user time", "system time");
-    fputs(
+        "--+-----------------------+-----------------------+-----------------------\n"
+        "  |       real time       |       user time       |      system time      \n"
+        "  |  min    mean     max  |  min    mean     max  |  min    mean     max  \n"
         "--+-----------------------+-----------------------+-----------------------\n",
         out);
     #define T (1000*1000.0)
