@@ -1,0 +1,69 @@
+.TH BENCH 1
+.SH NAME
+bench \- benchmark program
+.SH SYNOPSIS
+.TP
+.B bench
+[
+.B \-bcfel
+]
+[
+.B -p
+input-program
+|
+.B -i
+input-file
+]
+[
+.B -n
+run-times
+]
+[
+.B -s
+series-number
+]
+[
+.B -d
+dir
+]
+.B program-to-benchmark
+.SH DESCRIPTION
+.B bench
+run the program a several times.
+.SH OPTIONS
+.TP
+.BI \-n " times"
+set the count of program run, default 10
+.TP
+.BI \-i " input-file"
+use 
+.I input-file
+as stdin for program instead of /dev/null
+.TP
+.BI \-p " INPUT-PROGRAM"
+use output of 
+.I INPUT-PROGRAM
+as stdin for program instead of /dev/null
+.TP
+.BI \-s " SERIES-COUNT"
+enable
+.I series mode
+(see below). Run 
+.I SERIES-COUNT
+series, each series consist of TIMES program run.
+.TP
+.BI \-d " dir"
+change working directory to
+.I dir
+before running the benchmarked program. If you use this option please 
+specify relative paths as relative to
+.I dir
+not the current directory.
+.TP
+.BI \-e
+easy mode (see below).
+.TP
+.BI \-l
+show some extra information: page reclaims, page faults, voluntary and
+involuntary context switches.
+.TP
