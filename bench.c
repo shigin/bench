@@ -16,7 +16,13 @@
 #include <paths.h>
 #include <errno.h>
 
+#define DEFAULT_COUNT 10
 static int DEVNULL;
+
+/* I don't like the global variables, but in this case I don't like 
+   to introduce unnecessary argument to output functions. */
+static unsigned series = 0;
+
 
 struct slave_t {
     char **args;
@@ -32,9 +38,157 @@ struct measure_t {
     int bad;
 };
 
-/* I don't like the global variables, but in this case I don't like 
-   to introduce unnecessary argument to output functions. */
-static unsigned series = 0;
+typedef long long val_to_long(struct measure_t ru, size_t offset);
+
+typedef void print_function_t(FILE *out, const char *header, int full,
+    const struct measure_t *, unsigned count, unsigned bad);
+
+struct output_t {
+    FILE *out;
+    int filter;
+    int print_full;
+    int print_calibrate;
+    unsigned count;
+    unsigned series;
+    unsigned do_calibrate;
+    print_function_t *print_routine;
+
+};
+
+void help(FILE *out, const char *progname) {
+    fprintf(out,
+    "usage: %s [-n count] [-i ...] program-to-run\n"
+    "   runs program count times and prints min, average and maximum times\n"
+    "Options:\n"
+    "   -i file --- use file for stdin instead of /dev/null /input/\n"
+    "   -p prog --- use command output instead of /dev/null\n"
+    "   -n N    --- run program N times /num/\n"
+    "   -e      --- easy mode\n"
+    "   -b      --- output in sh format /bash/\n"
+    "   -C      --- output calibration time\n"
+    "   -l      --- print rusage information /long/\n"
+    "   -f      --- do not filter result /filter/\n"
+    "   -d dir  --- change directory before execute the program\n"
+    "   -s N    --- bench by series\n"
+    "\n",
+                 progname);
+}
+
+void batch_print(FILE *out, const char *header, int full,
+        const struct measure_t *measures, unsigned count, unsigned bad);
+
+void series_print(FILE *out, const char *header, int full,
+        const struct measure_t *measures, unsigned count, unsigned bad);
+
+void normal_print(FILE *out, const char *header, int full,
+        const struct measure_t *measures, unsigned count, unsigned bad);
+
+void easy_mode(FILE *out, const char *header, int full,
+        const struct measure_t *measures, unsigned count, unsigned bad);
+
+int parse_args(int argc, char **argv, struct output_t *output, struct slave_t *for_test) {
+    int opt;
+    int i;
+    int is_batch;
+    memset(output, 0, sizeof(struct output_t));
+    output->count = DEFAULT_COUNT;
+    output->out = stdout;
+    output->print_routine = normal_print;
+
+    memset(for_test, 0, sizeof(struct slave_t));
+    for_test->args = calloc(argc, sizeof(char *));
+
+    /* read options */
+    setenv("POSIXLY_CORRECT", "1", 0); /* gnu fix */
+    while ((opt = getopt(argc, argv, "n:i:p:C:s:hbcfle")) != -1) {
+        switch (opt) {
+          case 'h':
+            help(stdout, argv[0]);
+            exit(0);
+          case 'n':
+            /* read count */
+            output->count = atoi(optarg);
+            break;
+          case 'f':
+            output->filter = 0;
+            break;
+          case 'i':
+            if (for_test->iprog) {
+                fprintf(stderr, "%s: -i and -p doesn't have sense\n",
+                    argv[0]);
+                return 1;
+            }
+            for_test->ifile = strdup(optarg);
+            break;
+          case 'p':
+            if (for_test->ifile) {
+                fprintf(stderr, "%s: -i and -p doesn't have sense\n",
+                    argv[0]);
+                return 1;
+            }
+            for_test->iprog = strdup(optarg);
+            break;
+          case 'b':
+            output->print_routine = batch_print;
+            is_batch = 1;
+            break;
+          case 'e':
+            if (is_batch) {
+                fprintf(stderr, 
+                    "%s: batch output for easy isn't implemented yet\n",
+                    argv[0]);
+                return 1;
+            }
+            output->do_calibrate = 0;
+            output->filter = 0;
+            output->print_routine = easy_mode;
+            break;
+          case 's':
+            if (is_batch) {
+                fprintf(stderr, 
+                    "%s: batch output for series isn't implemented yet\n",
+                    argv[0]);
+                return 1;
+            }
+            output->series = atoi(optarg);
+            if (output->series <= 0) {
+                fprintf(stderr, "%s: series count should be greater than 0\n",
+                    argv[0]);
+                return 1;
+            }
+            output->filter = 0;
+            output->print_routine = series_print;
+            break;
+          case 'c':
+            output->print_calibrate = 1;
+            break;
+          case 'l':
+            output->print_full = 1;
+            break;
+          case 'C':
+            for_test->dir = strdup(optarg);
+            break;
+          case '?':
+          default:
+            fprintf(stderr,
+                "usage: %s [-n count] [-i input-file] program-to-run\n"
+                "error: '%c' option is unknown\n",
+                argv[0], optopt);
+            return 1;
+        }
+    }
+    if (optind >= argc) {
+        fprintf(stderr, "%s: expect some program to execute\n", argv[0]);
+        return 1;
+    }
+    if (output->series != 0) {
+        output->count *= output->series;
+    }
+    for (i = optind; i < argc; ++i) {
+        for_test->args[i - optind] = argv[i];
+    }
+    return 0;
+}
 
 int run_program(struct slave_t ft, struct measure_t *measure) {
     pid_t child;
@@ -96,14 +250,11 @@ struct measure_t *mdup(const struct measure_t *orig, unsigned count) {
     memcpy(copy, orig, count*sizeof(struct measure_t));
     return copy;
 }
-#define DEFAULT_COUNT 10
 
 double timeval2double(const struct timeval pair)
 {
     return pair.tv_sec + pair.tv_usec / (1000*1000.0);
 }
-
-typedef long long val_to_long(struct measure_t ru, size_t offset);
 
 long long ru_time2ll(const struct measure_t ru, size_t offset) {
     struct timeval *pair = (struct timeval *)((char *)&ru + offset);
@@ -204,9 +355,6 @@ void dump_rusage(struct rusage ru) {
     printf("vol. context switch: %ld\n", ru.ru_nvcsw);
     printf("invol. -//-  switch: %ld\n", ru.ru_nivcsw);
 }
-
-typedef void print_function_t(FILE *out, const char *header, int full,
-    const struct measure_t *, unsigned count, unsigned bad);
 
 unsigned get_failed(const struct measure_t *measures, unsigned count) {
     unsigned failed=0, i;
@@ -323,9 +471,6 @@ void series_print(FILE *out, const char *header, int full,
         out);
 }
 
-void normal_print(FILE *out, const char *header, int full,
-        const struct measure_t *measures, unsigned count, unsigned bad);
-
 void easy_mode(FILE *out, const char *header, int full,
         const struct measure_t *measures, unsigned count, unsigned bad) {
     unsigned i;
@@ -392,30 +537,10 @@ void normal_print(FILE *out, const char *header, int full,
     #undef SF
 }
 
-void help(FILE *out, const char *progname) {
-    fprintf(out,
-    "usage: %s [-n count] [-i ...] program-to-run\n"
-    "   runs program count times and prints min, average and maximum times\n"
-    "Options:\n"
-    "   -i file --- use file for stdin instead of /dev/null /input/\n"
-    "   -p prog --- use command output instead of /dev/null\n"
-    "   -n N    --- run program N times /num/\n"
-    "   -e      --- easy mode\n"
-    "   -b      --- output in sh format /bash/\n"
-    "   -C      --- output calibration time\n"
-    "   -l      --- print rusage information /long/\n"
-    "   -f      --- do not filter result /filter/\n"
-    "   -d dir  --- change directory before execute the program\n"
-    "   -s N    --- bench by series\n"
-    "\n",
-                 progname);
-}
-
 /**
  *  WARNING! Routine call exit(3) on errors.
  */
-void calibrate(FILE *out, print_function_t *print_summary,
-        const struct slave_t slave, int print_calibrate, int print_full) {
+void calibrate(const struct output_t output, const struct slave_t slave) {
     struct measure_t measure;
     int ret;
     ret = run_program(slave, &measure);
@@ -424,137 +549,43 @@ void calibrate(FILE *out, print_function_t *print_summary,
             "can't run program: exit code %d\n", ret);
         exit(1);
     }
-    if (print_calibrate) {
-        print_summary(out, "CALIBRATING", print_full, &measure, 1, 0);
-        fprintf(out, "\n\n");
+    if (output.print_calibrate) {
+        output.print_routine(output.out, "CALIBRATING", output.print_full, &measure, 1, 0);
+        fprintf(output.out, "\n\n");
     }
 }
 
 int main(int argc, char **argv) {
     struct measure_t *measures;
-    int count = DEFAULT_COUNT;
+    struct output_t output;
     struct slave_t for_test;
-    int i, opt;
-    int is_batch = 0;
-    int do_calibrate = 1;
-    int print_calibrate = 0;
-    int print_full = 0;
-    int filter = 1;
-    print_function_t *print_routine = normal_print;
+    unsigned i;
 
-    memset(&for_test, 0, sizeof(struct slave_t));
-    for_test.args = calloc(argc, sizeof(char *));
     DEVNULL = open(_PATH_DEVNULL, O_RDWR);
     if (DEVNULL == -1) {
         fprintf(stderr, "can't open %s: %s\n",
                 _PATH_DEVNULL, strerror(errno));
     }
-    /* read options */
-    setenv("POSIXLY_CORRECT", "1", 0); /* gnu fix */
-    while ((opt = getopt(argc, argv, "n:i:p:C:s:hbcfle")) != -1) {
-        switch (opt) {
-          case 'h':
-            help(stdout, argv[0]);
-            return 0;
-          case 'n':
-            /* read count */
-            count = atoi(optarg);
-            break;
-          case 'f':
-            filter = 0;
-            break;
-          case 'i':
-            if (for_test.iprog) {
-                fprintf(stderr, "%s: -i and -p doesn't have sense\n",
-                    argv[0]);
-                return 1;
-            }
-            for_test.ifile = strdup(optarg);
-            break;
-          case 'p':
-            if (for_test.ifile) {
-                fprintf(stderr, "%s: -i and -p doesn't have sense\n",
-                    argv[0]);
-                return 1;
-            }
-            for_test.iprog = strdup(optarg);
-            break;
-          case 'b':
-            print_routine = batch_print;
-            is_batch = 1;
-            break;
-          case 'e':
-            if (is_batch) {
-                fprintf(stderr, 
-                    "%s: batch output for easy isn't implemented yet\n",
-                    argv[0]);
-                return 1;
-            }
-            do_calibrate = 0;
-            filter = 0;
-            print_routine = easy_mode;
-            break;
-          case 's':
-            if (is_batch) {
-                fprintf(stderr, 
-                    "%s: batch output for series isn't implemented yet\n",
-                    argv[0]);
-                return 1;
-            }
-            series = atoi(optarg);
-            if (series <= 0) {
-                fprintf(stderr, "%s: series count should be greater than 0\n",
-                    argv[0]);
-                return 1;
-            }
-            filter = 0;
-            print_routine = series_print;
-            break;
-          case 'c':
-            print_calibrate = 1;
-            break;
-          case 'l':
-            print_full = 1;
-            break;
-          case 'C':
-            for_test.dir = strdup(optarg);
-            break;
-          case '?':
-          default:
-            fprintf(stderr,
-                "usage: %s [-n count] [-i input-file] program-to-run\n"
-                "error: '%c' option is unknown\n",
-                argv[0], optopt);
-            return 1;
-        }
-    }
-    if (optind >= argc) {
-        fprintf(stderr, "%s: expect some program to execute\n", argv[0]);
+
+    if (parse_args(argc, argv, &output, &for_test) != 0) {
         return 1;
     }
-    if (series != 0) {
-        count *= series;
+    measures = calloc(output.count, sizeof(struct measure_t));
+
+    if (output.do_calibrate) {
+        calibrate(output, for_test);
     }
 
-    measures = calloc(count, sizeof(struct measure_t));
-
-    for (i = optind; i < argc; ++i) {
-        for_test.args[i - optind] = argv[i];
-    }
-    if (do_calibrate) {
-        calibrate(stdout, print_routine, for_test,
-            print_calibrate, print_full);
-    }
-    for (i = 0; i < count; ++i)
-    {
+    for (i = 0; i < output.count; ++i) {
         run_program(for_test, measures + i);
     }
+
     {
         unsigned bad = 0;
-        if (filter) {
-            bad = mark_bad_all(measures, count);
+        if (output.filter) {
+            bad = mark_bad_all(measures, output.count);
         }
-        print_routine(stdout, "SUMMARY", print_full, measures, count, bad);
+        output.print_routine(output.out, "SUMMARY", output.print_full, measures, output.count, bad);
     }
     free(for_test.args);
     free(for_test.ifile);
