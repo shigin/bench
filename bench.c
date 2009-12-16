@@ -402,7 +402,7 @@ void help(FILE *out, const char *progname) {
     "   -n N    --- run program N times /num/\n"
     "   -e      --- easy mode\n"
     "   -b      --- output in sh format /bash/\n"
-    "   -c      --- output calibration time\n"
+    "   -C      --- output calibration time\n"
     "   -l      --- print rusage information /long/\n"
     "   -f      --- do not filter result /filter/\n"
     "   -d dir  --- change directory before execute the program\n"
@@ -451,7 +451,7 @@ int main(int argc, char **argv) {
     }
     /* read options */
     setenv("POSIXLY_CORRECT", "1", 0); /* gnu fix */
-    while ((opt = getopt(argc, argv, "n:i:p:d:s:hbcfle")) != -1) {
+    while ((opt = getopt(argc, argv, "n:i:p:C:s:hbcfle")) != -1) {
         switch (opt) {
           case 'h':
             help(stdout, argv[0]);
@@ -516,7 +516,7 @@ int main(int argc, char **argv) {
           case 'l':
             print_full = 1;
             break;
-          case 'd':
+          case 'C':
             for_test.dir = strdup(optarg);
             break;
           case '?':

@@ -59,7 +59,7 @@ write_bench_data() {
     for rev in $revs ; do
         set_revision "$wc" "$rev" || { rm $tmp; die "can't checkout $rev"; }
         (cd "$wc" && $MAKE) || { rm $tmp; die "can't make"; }
-        if $BENCH -b -d $wc $PROGRAM > "$tmp" ; then
+        if $BENCH -b -C $wc $PROGRAM > "$tmp" ; then
             grep '=' $tmp | sed "s/^/rev${rev}_/" >> "$data_file"
             sleep 1
         else
