@@ -93,6 +93,8 @@ int parse_args(int argc, char **argv, struct output_t *output, struct slave_t *f
     memset(output, 0, sizeof(struct output_t));
     output->count = DEFAULT_COUNT;
     output->out = stdout;
+    output->filter = 1;
+    output->do_calibrate = 1;
     output->print_routine = normal_print;
 
     memset(for_test, 0, sizeof(struct slave_t));
