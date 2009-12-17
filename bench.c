@@ -40,8 +40,10 @@ struct measure_t {
 
 typedef long long val_to_long(struct measure_t ru, size_t offset);
 
-typedef void print_function_t(FILE *out, const char *header, int full,
-    const struct measure_t *, unsigned count, unsigned bad);
+struct output_t;
+
+typedef void print_function_t(const struct output_t *out, const char *header,
+    const struct measure_t *measures, unsigned count);
 
 struct output_t {
     FILE *out;
@@ -76,17 +78,17 @@ void help(FILE *out, const char *progname) {
                  progname);
 }
 
-void batch_print(FILE *out, const char *header, int full,
-        const struct measure_t *measures, unsigned count, unsigned bad);
+void batch_print(const struct output_t *out, const char *header,
+    const struct measure_t *measures, unsigned count);
 
-void series_print(FILE *out, const char *header, int full,
-        const struct measure_t *measures, unsigned count, unsigned bad);
+void series_print(const struct output_t *out, const char *header,
+    const struct measure_t *measures, unsigned count);
 
-void normal_print(FILE *out, const char *header, int full,
-        const struct measure_t *measures, unsigned count, unsigned bad);
+void normal_print(const struct output_t *out, const char *header,
+    const struct measure_t *measures, unsigned count);
 
-void easy_mode(FILE *out, const char *header, int full,
-        const struct measure_t *measures, unsigned count, unsigned bad);
+void easy_mode(const struct output_t *out, const char *header,
+    const struct measure_t *measures, unsigned count);
 
 int parse_args(int argc, char **argv, struct output_t *output, struct slave_t *for_test) {
     int opt;
@@ -383,25 +385,35 @@ unsigned get_failed(const struct measure_t *measures, unsigned count) {
     return failed;
 }
 
-void batch_print(FILE *out, const char *header, int full,
-        const struct measure_t *measures, unsigned count, unsigned bad) {
+unsigned get_bad(const struct measure_t *measures, unsigned count) {
+    unsigned bad=0, i;
+    for (i = 0; i < count; ++i) {
+        if (measures[i].bad)
+            bad += 1;
+    }
+    return bad;
+}
+
+void batch_print(const struct output_t *out, const char *header,
+        const struct measure_t *measures, unsigned count) {
     unsigned failed = get_failed(measures, count);
-    fprintf(out, "# %s\n", header);
-    fprintf(out, "bench_failed=%u\n", failed);
-    fprintf(out, "bench_filtered=%u\n\n", bad - failed);
+    unsigned bad = get_bad(measures, count);
+    fprintf(out->out, "# %s\n", header);
+    fprintf(out->out, "bench_failed=%u\n", failed);
+    fprintf(out->out, "bench_filtered=%u\n\n", bad - failed);
     #define T (1000*1000.0)
     #define TD(prefix, x) do {\
         struct statistic_t s;\
         calculate_statistic(&s, measures, count,\
             offsetof(struct measure_t, x), ru_time2ll);\
-        fprintf(out, "bench_%s_min=%.3f\n", prefix, s.min/T);\
-        fprintf(out, "bench_%s_mean=%.3f\n", prefix, s.mean/T);\
-        fprintf(out, "bench_%s_sd=%.3f\n", prefix, s.sd/T);\
-        fprintf(out, "bench_%s_max=%.3f\n", prefix, s.max/T);\
-        fprintf(out, "bench_%s_min_ms=%lld\n", prefix, s.min/1000);\
-        fprintf(out, "bench_%s_mean_ms=%.0f\n", prefix, s.mean/1000);\
-        fprintf(out, "bench_%s_sd_ms=%.0f\n", prefix, s.sd/1000);\
-        fprintf(out, "bench_%s_max_ms=%lld\n\n", prefix, s.max/1000);\
+        fprintf(out->out, "bench_%s_min=%.3f\n", prefix, s.min/T);\
+        fprintf(out->out, "bench_%s_mean=%.3f\n", prefix, s.mean/T);\
+        fprintf(out->out, "bench_%s_sd=%.3f\n", prefix, s.sd/T);\
+        fprintf(out->out, "bench_%s_max=%.3f\n", prefix, s.max/T);\
+        fprintf(out->out, "bench_%s_min_ms=%lld\n", prefix, s.min/1000);\
+        fprintf(out->out, "bench_%s_mean_ms=%.0f\n", prefix, s.mean/1000);\
+        fprintf(out->out, "bench_%s_sd_ms=%.0f\n", prefix, s.sd/1000);\
+        fprintf(out->out, "bench_%s_max_ms=%lld\n\n", prefix, s.max/1000);\
         } while (0)
     TD("real", real);
     TD("sys", ru.ru_stime);
@@ -413,12 +425,12 @@ void batch_print(FILE *out, const char *header, int full,
         struct statistic_t s;\
         calculate_statistic(&s, measures, count,\
             offsetof(struct measure_t, ru.x), ru_long2ll);\
-        fprintf(out, "bench_%s_min=%lld\n", prefix, s.min);\
-        fprintf(out, "bench_%s_mean=%.2f\n", prefix, s.mean);\
-        fprintf(out, "bench_%s_sd=%.2f\n", prefix, s.sd);\
-        fprintf(out, "bench_%s_max=%lld\n\n", prefix, s.max);\
+        fprintf(out->out, "bench_%s_min=%lld\n", prefix, s.min);\
+        fprintf(out->out, "bench_%s_mean=%.2f\n", prefix, s.mean);\
+        fprintf(out->out, "bench_%s_sd=%.2f\n", prefix, s.sd);\
+        fprintf(out->out, "bench_%s_max=%lld\n\n", prefix, s.max);\
         } while (0)
-    if (full) {
+    if (out->print_full) {
         SF("minflt", ru_minflt);
         SF("majflt", ru_majflt);
         SF("nvcsw", ru_nvcsw);
@@ -427,17 +439,17 @@ void batch_print(FILE *out, const char *header, int full,
     #undef SF
 }
 
-void series_print(FILE *out, const char *header, int full,
-        const struct measure_t *measures, unsigned count, unsigned bad) {
+void series_print(const struct output_t *out, const char *header,
+    const struct measure_t *measures, unsigned count) {
     unsigned i;
-    (void)full;
     unsigned in_series = count/series;
+    unsigned failed = get_failed(measures, count);
     if (in_series == 0)
         in_series = 1;
 
-    fprintf(out, "%40s\n", header);
-    if (bad > 0) {
-        fprintf(out, "failed run: %u\n", bad);
+    fprintf(out->out, "%40s\n", header);
+    if (failed > 0) {
+        fprintf(out->out, "failed run: %u\n", failed);
     }
     /* XXX I don't like to produce table in that way */
     fputs(
@@ -445,23 +457,23 @@ void series_print(FILE *out, const char *header, int full,
         "  |       real time       |       user time       |      system time      \n"
         "  |  min    mean     max  |  min    mean     max  |  min    mean     max  \n"
         "--+-----------------------+-----------------------+-----------------------\n",
-        out);
+        out->out);
     #define T (1000*1000.0)
     #define TD(from, cnt, x) do {\
         struct statistic_t s;\
         calculate_statistic(&s, from, cnt,\
             offsetof(struct measure_t, x), ru_time2ll);\
-        fprintf(out, "%6.3f [%6.3f] %6.3f ",\
+        fprintf(out->out, "%6.3f [%6.3f] %6.3f ",\
             s.min/T, s.mean/T, s.max/T); \
         } while (0)
     for (i = 0; i < count; i += in_series) {
-        fprintf(out, "%2u|", i/in_series + 1);
+        fprintf(out->out, "%2u|", i/in_series + 1);
         TD(measures + i, in_series, real);
-        fputs("|", out);
+        fputs("|", out->out);
         TD(measures + i, in_series, ru.ru_utime);
-        fputs("|", out);
+        fputs("|", out->out);
         TD(measures + i, in_series, ru.ru_stime);
-        fputs("\n", out);
+        fputs("\n", out->out);
     }
     if (in_series < count) {
         struct measure_t *copy = mdup(measures, count);
@@ -469,16 +481,17 @@ void series_print(FILE *out, const char *header, int full,
         filtered = mark_bad_all(copy, count);
         fputs(
             "--+-----------------------+-----------------------+-----------------------\n",
-            out);
-        fputs("  |", out);
+            out->out);
+        fputs("  |", out->out);
         TD(copy, count, real);
-        fputs("|", out);
+        fputs("|", out->out);
         TD(copy, count, ru.ru_utime);
-        fputs("|", out);
+        fputs("|", out->out);
         TD(copy, count, ru.ru_stime);
-        fputs("\n", out);
+        fputs("\n", out->out);
         if (filtered > 0) {
-            fprintf(out, "  |   filtered out: %2u    |                       |\n", filtered);
+            fprintf(out->out,
+            "  |   filtered out->out: %2u    |                       |\n", filtered);
         }
         free(copy);
     }
@@ -486,21 +499,20 @@ void series_print(FILE *out, const char *header, int full,
     #undef T
     fputs(
         "--+-----------------------+-----------------------+-----------------------\n",
-        out);
+        out->out);
 }
 
-void easy_mode(FILE *out, const char *header, int full,
-        const struct measure_t *measures, unsigned count, unsigned bad) {
+void easy_mode(const struct output_t *out, const char *header,
+    const struct measure_t *measures, unsigned count) {
     unsigned i;
     unsigned filtered;
     struct measure_t *copy = mdup(measures, count);
-    (void)bad;
-    fprintf(out, "%20s\n", header);
-    fputs("-----+--------+--------+--------+----\n", out);
-    fputs("     |  real  |  user  |  sys   | ec \n", out);
-    fputs("-----+--------+--------+--------+----\n", out);
+    fprintf(out->out, "%20s\n", header);
+    fputs("-----+--------+--------+--------+----\n", out->out);
+    fputs("     |  real  |  user  |  sys   | ec \n", out->out);
+    fputs("-----+--------+--------+--------+----\n", out->out);
     for (i = 0; i < count; ++i) {
-        fprintf(out, " %3u | %6.3f | %6.3f | %6.3f | %2d\n",
+        fprintf(out->out, " %3u | %6.3f | %6.3f | %6.3f | %2d\n",
             i + 1,
             timeval2double(measures[i].real),
             timeval2double(measures[i].ru.ru_utime),
@@ -508,29 +520,30 @@ void easy_mode(FILE *out, const char *header, int full,
             measures[i].exit_status
         );
     }
-    fputs("-----+--------+--------+--------+----\n", out);
+    fputs("-----+--------+--------+--------+----\n", out->out);
     filtered = mark_bad_all(copy, count);
-    normal_print(out, 0, full, copy, count, filtered);
+    normal_print(out, 0, copy, count);
     free(copy);
 }
 
-void normal_print(FILE *out, const char *header, int full,
-        const struct measure_t *measures, unsigned count, unsigned bad) {
+void normal_print(const struct output_t *out, const char *header,
+    const struct measure_t *measures, unsigned count) {
     unsigned failed = get_failed(measures, count);
+    unsigned bad = get_bad(measures, count);
     if (header)
-        fprintf(out, "       %s\n", header);
+        fprintf(out->out, "       %s\n", header);
     if (failed != 0) {
-        fprintf(out, "program failed: %u\n", failed);
+        fprintf(out->out, "program failed: %u\n", failed);
     }
     if (bad != 0) {
-        fprintf(out, "filtered out: %u\n",   bad - failed);
+        fprintf(out->out, "filtered out->out: %u\n",   bad - failed);
     }
     #define T (1000*1000.0)
     #define TD(prefix, x) do {\
         struct statistic_t s;\
         calculate_statistic(&s, measures, count,\
             offsetof(struct measure_t, x), ru_time2ll);\
-        fprintf(out, "%s: %6.3f [%6.3f +-%4.3f] %6.3f\n",\
+        fprintf(out->out, "%s: %6.3f [%6.3f +-%4.3f] %6.3f\n",\
             prefix, s.min/T, s.mean/T, s.sd/T, s.max/T); \
         } while (0)
     TD("real time", real);
@@ -543,10 +556,10 @@ void normal_print(FILE *out, const char *header, int full,
         struct statistic_t s;\
         calculate_statistic(&s, measures, count,\
             offsetof(struct measure_t, ru.x), ru_long2ll);\
-        fprintf(out, "%s: %4lld [%5.2f +-%2.2f] %5lld\n",\
+        fprintf(out->out, "%s: %4lld [%5.2f +-%2.2f] %5lld\n",\
             prefix, s.min, s.mean, s.sd, s.max); \
         } while (0)
-    if (full) {
+    if (out->print_full) {
         SF("page reclaims      ", ru_minflt);
         SF("page faults        ", ru_majflt);
         SF("vol. context switch", ru_nvcsw);
@@ -568,7 +581,7 @@ void calibrate(const struct output_t output, const struct slave_t slave) {
         exit(1);
     }
     if (output.print_calibrate) {
-        output.print_routine(output.out, "CALIBRATING", output.print_full, &measure, 1, 0);
+        output.print_routine(&output, "CALIBRATING", &measure, 1);
         fprintf(output.out, "\n\n");
     }
 }
@@ -603,7 +616,7 @@ int main(int argc, char **argv) {
         if (output.filter) {
             bad = mark_bad_all(measures, output.count);
         }
-        output.print_routine(output.out, "SUMMARY", output.print_full, measures, output.count, bad);
+        output.print_routine(&output, "SUMMARY", measures, output.count);
     }
     free(for_test.args);
     free(for_test.ifile);
