@@ -70,6 +70,8 @@ void help(FILE *out, const char *progname) {
     "   -f      --- do not filter result /filter/\n"
     "   -d dir  --- change directory before execute the program\n"
     "   -s N    --- bench by series\n"
+    "   -o file --- output to file\n"
+    "   -a      --- append, instead of rewrite\n"
     "\n",
                  progname);
 }
@@ -90,6 +92,8 @@ int parse_args(int argc, char **argv, struct output_t *output, struct slave_t *f
     int opt;
     int i;
     int is_batch;
+    const char *mode = "w";
+    const char *file_name = 0;
     memset(output, 0, sizeof(struct output_t));
     output->count = DEFAULT_COUNT;
     output->out = stdout;
@@ -102,11 +106,17 @@ int parse_args(int argc, char **argv, struct output_t *output, struct slave_t *f
 
     /* read options */
     setenv("POSIXLY_CORRECT", "1", 0); /* gnu fix */
-    while ((opt = getopt(argc, argv, "n:i:p:C:s:hbcfle")) != -1) {
+    while ((opt = getopt(argc, argv, "n:i:p:C:s:o:ahbcfle")) != -1) {
         switch (opt) {
           case 'h':
             help(stdout, argv[0]);
             exit(0);
+          case 'a':
+            mode = "a";
+            break;
+          case 'o':
+            file_name = optarg;
+            break;
           case 'n':
             /* read count */
             output->count = atoi(optarg);
@@ -188,6 +198,12 @@ int parse_args(int argc, char **argv, struct output_t *output, struct slave_t *f
     }
     for (i = optind; i < argc; ++i) {
         for_test->args[i - optind] = argv[i];
+    }
+
+    if (file_name) {
+        output->out = fopen(file_name, mode);
+        if (output->out == 0) {
+        }
     }
     return 0;
 }
