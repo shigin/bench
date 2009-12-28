@@ -1,3 +1,5 @@
+#include "config.h"
+
 #ifdef HAVE_PATHS_H
 #include <paths.h>
 #else
