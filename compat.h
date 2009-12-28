@@ -1,10 +1,12 @@
+#ifdef HAVE_PATHS_H
+#include <paths.h>
+#else
 /*
  * #include <paths.h> - sun os hasn't got paths.h and won't compile 
  * if I include one.
  * 
  * I don't think _PATH_DEVNULL is usefull define, but who knows
  */
-#ifndef _PATH_DEVNULL
 #define _PATH_DEVNULL "/dev/null"
 #endif
 

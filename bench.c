@@ -13,8 +13,9 @@
 #include <sys/stat.h>
 
 #include <fcntl.h>
-#include <paths.h>
 #include <errno.h>
+
+#include "compat.h"
 
 #define DEFAULT_COUNT 10
 static int DEVNULL;
