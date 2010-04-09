@@ -19,11 +19,6 @@
 #define DEFAULT_COUNT 10
 static int DEVNULL;
 
-/* I don't like the global variables, but in this case I don't like 
-   to introduce unnecessary argument to output functions. */
-static unsigned series = 0;
-
-
 struct slave_t {
     char **args;
     char *ifile;
@@ -442,7 +437,7 @@ void batch_print(const struct output_t *out, const char *header,
 void series_print(const struct output_t *out, const char *header,
     const struct measure_t *measures, unsigned count) {
     unsigned i;
-    unsigned in_series = count/series;
+    unsigned in_series = count/out->series;
     unsigned failed = get_failed(measures, count);
     if (in_series == 0)
         in_series = 1;
