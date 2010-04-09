@@ -93,7 +93,7 @@ void easy_mode(const struct output_t *out, const char *header,
 int parse_args(int argc, char **argv, struct output_t *output, struct slave_t *for_test) {
     int opt;
     int i;
-    int is_batch;
+    int is_batch = 0;
     const char *mode = "w";
     const char *file_name = 0;
     memset(output, 0, sizeof(struct output_t));
