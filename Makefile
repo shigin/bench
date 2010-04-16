@@ -13,4 +13,4 @@ install: bench bench-git
 	cp bench ${BIN_PREFIX}
 	sed 's#BENCH=./bench#BENCH=bench#' < bench-git > ${BIN_PREFIX}/bench-git
 	chmod +x ${BIN_PREFIX}/bench-git
-	ln ${BIN_PREFIX}/bench-git ${BIN_PREFIX}/bench-svn
+	ln -f ${BIN_PREFIX}/bench-git ${BIN_PREFIX}/bench-svn
