@@ -9,6 +9,7 @@ usage: $0 [--repo url|--conf file|--dir dir] [--rev revision]... program
     --make program  --- use program to build instead of make
     --rev revision  --- bench revision
     --minmax        --- show min and max times
+    --keep          --- do use previous .bench-data file
     program         --- program to bench
 END
 }
@@ -57,6 +58,10 @@ write_bench_data() {
     local tmp="`mktemp tempdata.XXX`"
 
     for rev in $revs ; do
+        eval "local has_key=\"\$rev${rev}_bench_sys_mean\""
+        if [ -n "$has_key" ] ; then
+            continue
+        fi
         set_revision "$wc" "$rev" || { rm $tmp; die "can't checkout $rev"; }
         (cd "$wc" && $MAKE) || { rm $tmp; die "can't make"; }
         if $BENCH -b -C $wc $PROGRAM > "$tmp" ; then
@@ -130,8 +135,12 @@ END
 }
 
 MINMAX=0
+CLEAN_BASE=1
 while [ ! -z "$1" ] ; do
     case $1 in
+    --keep)
+        CLEAN_BASE=0
+        ;;
     --minmax)
         MINMAX=1
         ;;
@@ -198,7 +207,11 @@ if [ -n "$REPO" ] ; then
     checkout "$REPO" "$DIRECTORY" || die "can't clone repository"
 fi
 
-echo > .bench-data
+if [ "$CLEAN_BASE" = 1 ] ; then
+    echo > .bench-data
+fi
+
+[ -r ./.bench-data ] && . ./.bench-data
 if [ -n "$DIRECTORY" ] ; then
     write_bench_data "$REVS" "$DIRECTORY" "$PROGRAM" .bench-data
 else
