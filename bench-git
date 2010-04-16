@@ -147,7 +147,15 @@ while [ ! -z "$1" ] ; do
         ;;
     --conf)
         [ -z "$2" ] && "conf option require configuration file"
-        . $2
+        if echo "$2" | fgrep -q / ; then
+            CONF="$2"
+        else
+            # by standard, '.' (dot) search file in PATH if file name doesn't
+            # contain slash
+            # http://www.opengroup.org/onlinepubs/009695399/utilities/dot.html
+            CONF="./$2"
+        fi
+        . "$CONF" || die "can't load config file $2"
         shift
         ;;
     --rev)
