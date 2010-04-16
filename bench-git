@@ -136,17 +136,17 @@ while [ ! -z "$1" ] ; do
         MINMAX=1
         ;;
     --dir)
-        [ -z "$2" ] && die"directory option require directory"
+        [ -z "$2" ] && die "directory option require directory"
         DIRECTORY="$2"
         shift
         ;;
     --repo)
-        [ -z "$2" ] && "repo option require repository URL"
+        [ -z "$2" ] && die "repo option require repository URL"
         REPO="$2"
         shift
         ;;
     --conf)
-        [ -z "$2" ] && "conf option require configuration file"
+        [ -z "$2" ] && die "conf option require configuration file"
         if echo "$2" | fgrep -q / ; then
             CONF="$2"
         else
@@ -159,12 +159,12 @@ while [ ! -z "$1" ] ; do
         shift
         ;;
     --rev)
-        [ -z "$2" ] && "rev option require revision number"
+        [ -z "$2" ] && die "rev option require revision number"
         REVS="$REVS $2"
         shift
         ;;
     --make)
-        [ -z "$2" ] && "make option require make program"
+        [ -z "$2" ] && die "make option require make program"
         MAKE="$2"
         shift
         ;;
