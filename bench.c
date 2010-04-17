@@ -49,6 +49,7 @@ struct output_t {
     unsigned series;
     unsigned do_calibrate;
     print_function_t *print_routine;
+    struct measure_t calibration_time;
 
 };
 
@@ -341,6 +342,28 @@ int mark_bad(const struct statistic_t *stat,
     return bad;
 }
 
+int measure_in_sd(const struct measure_t *measures, unsigned count,
+        struct measure_t single) {
+    #define HCALC(stat, x) calculate_statistic(&stat, measures, count, \
+        offsetof(struct measure_t, x), ru_time2ll);
+    #define HMARK(stat, x) mark_bad(&stat, &single, 1, \
+        offsetof(struct measure_t, x), ru_time2ll);
+    struct statistic_t sr;
+    struct statistic_t ss;
+    struct statistic_t su;
+    HCALC(sr, real);
+    HCALC(ss, ru.ru_stime);
+    HCALC(su, ru.ru_utime);
+
+    HMARK(sr, real);
+    HMARK(ss, ru.ru_stime);
+    HMARK(su, ru.ru_utime);
+    #undef HCALC
+    #undef HMARK
+
+    return !single.bad;
+}
+
 unsigned mark_bad_all(struct measure_t *measures, unsigned count) {
     #define HCALC(stat, x) calculate_statistic(&stat, measures, count, \
         offsetof(struct measure_t, x), ru_time2ll);
@@ -557,23 +580,28 @@ void normal_print(const struct output_t *out, const char *header,
         SF("invol. -//-  switch", ru_nivcsw);
     }
     #undef SF
+    if (out->do_calibrate) {
+        if (!measure_in_sd(measures, count, out->calibration_time)) {
+            fprintf(out->out,
+            "WARNING! Calibration time is more than 3 sigma apart from mean.\n");
+        }
+    }
 }
 
 /**
  *  WARNING! Routine call exit(3) on errors.
  */
-void calibrate(const struct output_t output, const struct slave_t slave) {
-    struct measure_t measure;
+void calibrate(struct output_t *output, const struct slave_t slave) {
     int ret;
-    ret = run_program(slave, &measure);
+    ret = run_program(slave, &output->calibration_time);
     if (ret != 0) {
-        fprintf(stderr, 
-            "can't run program: exit code %d\n", ret);
+        fprintf(stderr, "can't run program: exit code %d\n", ret);
         exit(1);
     }
-    if (output.print_calibrate) {
-        output.print_routine(&output, "CALIBRATING", &measure, 1);
-        fprintf(output.out, "\n\n");
+    if (output->print_calibrate) {
+        output->print_routine(output, "CALIBRATING",
+                &output->calibration_time, 1);
+        fprintf(output->out, "\n\n");
     }
 }
 
@@ -595,7 +623,7 @@ int main(int argc, char **argv) {
     measures = calloc(output.count, sizeof(struct measure_t));
 
     if (output.do_calibrate) {
-        calibrate(output, for_test);
+        calibrate(&output, for_test);
     }
 
     for (i = 0; i < output.count; ++i) {
