@@ -138,6 +138,12 @@ int parse_args(int argc, char **argv, struct output_t *output, struct slave_t *f
             for_test->iprog = strdup(optarg);
             break;
           case 'b':
+            if (output->print_routine != normal_print) {
+                fprintf(stderr,
+                    "%s: batch option can be used only for normal mode\n",
+                    argv[0]);
+                return 1;
+            }
             output->print_routine = batch_print;
             is_batch = 1;
             break;
