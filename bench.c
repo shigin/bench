@@ -361,16 +361,6 @@ unsigned mark_bad_all(struct measure_t *measures, unsigned count) {
     return bad;
 }
 
-void dump_rusage(struct rusage ru) {
-    printf("sys time     : %5.2f\n", timeval2double(ru.ru_stime));
-    printf("user time    : %5.2f\n", timeval2double(ru.ru_utime));
-
-    printf("page reclaims      : %ld\n", ru.ru_minflt);
-    printf("page faults        : %ld\n", ru.ru_majflt);
-    printf("vol. context switch: %ld\n", ru.ru_nvcsw);
-    printf("invol. -//-  switch: %ld\n", ru.ru_nivcsw);
-}
-
 unsigned get_failed(const struct measure_t *measures, unsigned count) {
     unsigned failed=0, i;
     for (i = 0; i < count; ++i) {
