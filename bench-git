@@ -194,6 +194,14 @@ while [ ! -z "$1" ] ; do
     shift
 done
 
+if [ -z "$DIRECTORY" -a -z "$REPO" -a -z "$CONFIG" ] ; then
+    if [ -r ./.bench-config ] ; then
+        . ./.bench-config
+    else
+        die "you have to specify dir, config or repo"
+    fi
+fi
+
 if [ -z "$REVS" ] ; then
     REVS="HEAD"
 fi

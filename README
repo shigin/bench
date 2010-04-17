@@ -80,3 +80,22 @@ The sample usage:
         6454  |  0.072     0.000  |  0.000     0.000  |  0.002     0.002
         b440  |  0.041     0.000  |  0.000     0.001  |  0.001     0.002
     ----------+-------------------+-------------------+------------------
+
+If options 'repo', 'dir' or 'config' are not defined, bench uses configure
+file .bench-config from the current directory.
+
+Configure file
+--------------
+
+Configure file is a normal shell script with the following options:
+    
+    REPO --- repository path
+    DIRECTORY --- directory with working copy
+    PROGRAM --- program to run
+    MAKE --- program to use as make script
+
+The sample config:
+REPO=git://..../... # comment
+MAKE="python setup.py build"
+PROGRAM="python time.py"   # the quotes are mandatory
+
