@@ -36,7 +36,7 @@ case $0 in
             svn update -r "$rev" "$wc"
         }
         ;;
-    *bench-git|*)
+    *bench-git)
         checkout() {
             local repository="$1"
             local target="$2"
@@ -48,6 +48,9 @@ case $0 in
             local rev="$2"
             (cd $wc && git reset --hard $rev)
         }
+        ;;
+    *)
+        die "bench-git can't work as $0"
 esac
 
 write_bench_data() {
