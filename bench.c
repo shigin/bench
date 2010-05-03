@@ -505,7 +505,7 @@ void series_print(const struct output_t *out, const char *header,
         fputs("\n", out->out);
         if (filtered > 0) {
             fprintf(out->out,
-            "  |   filtered out->out: %2u    |                       |\n", filtered);
+            "  |   filtered out: %2u    |                       |\n", filtered);
         }
         free(copy);
     }
@@ -550,7 +550,7 @@ void normal_print(const struct output_t *out, const char *header,
         fprintf(out->out, "program failed: %u\n", failed);
     }
     if (bad != 0) {
-        fprintf(out->out, "filtered out->out: %u\n",   bad - failed);
+        fprintf(out->out, "filtered out: %u\n",   bad - failed);
     }
     #define T (1000*1000.0)
     #define TD(prefix, x) do {\
