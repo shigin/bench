@@ -10,6 +10,8 @@ usage: $0 [--repo url|--conf file|--dir dir] [--rev revision]... program
     --rev revision  --- bench revision
     --minmax        --- show min and max times
     --keep          --- do use previous .bench-data file
+    --input file    --- use file as stdin for program
+    --iprogram cmd  --- use cmd stdout as stdin for program
     program         --- program to bench
 END
 }
@@ -59,6 +61,9 @@ write_bench_data() {
     local program="$3"
     local data_file="$4"
     local tmp="`mktemp tempdata.XXX`"
+    local bench_opt="-b -C $wc"
+    [ -n "$INPUT" ] && bench_opt="$bench_opt -i '$INPUT'"
+    [ -n "$INPUT_PROGRAM" ] && bench_opt="$bench_opt -p \"$INPUT_PROGRAM\""
 
     for rev in $revs ; do
         eval "local has_key=\"\$rev${rev}_bench_sys_mean\""
@@ -67,7 +72,7 @@ write_bench_data() {
         fi
         set_revision "$wc" "$rev" || { rm $tmp; die "can't checkout $rev"; }
         (cd "$wc" && $MAKE) || { rm $tmp; die "can't make"; }
-        if $BENCH -b -C $wc $PROGRAM > "$tmp" ; then
+        if eval $BENCH $bench_opt $PROGRAM > "$tmp" ; then
             grep '=' $tmp | sed "s/^/rev${rev}_/" >> "$data_file"
             sleep 1
         else
@@ -139,8 +144,22 @@ END
 
 MINMAX=0
 CLEAN_BASE=1
+INPUT=""
+INPUT_PROGRAM=""
 while [ ! -z "$1" ] ; do
     case $1 in
+    --input)
+        [ -z "$INPUT_PROGRAM" ] || die \
+            "--input and --iprogram options are mutual exclusive"
+        INPUT="$2"
+        shift
+        ;;
+    --iprogram)
+        [ -z "$INPUT" ] || die \
+            "--input and --iprogram options are mutual exclusive"
+        INPUT_PROGRAM="$2"
+        shift
+        ;;
     --keep)
         CLEAN_BASE=0
         ;;

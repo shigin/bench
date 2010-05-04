@@ -89,10 +89,12 @@ Configure file
 
 Configure file is a normal shell script with the following options:
     
-    REPO --- repository path
-    DIRECTORY --- directory with working copy
-    PROGRAM --- program to run
-    MAKE --- program to use as make script
+    REPO          --- repository path
+    DIRECTORY     --- directory with working copy
+    PROGRAM       --- program to run
+    MAKE          --- program to use as make script
+    INPUT         --- file to use as stdin for PROGRAM
+    INPUT_PROGRAM --- cmd to use as stdin for PROGRAM
 
 The sample config:
 REPO=git://..../... # comment
